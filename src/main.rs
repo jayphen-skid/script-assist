@@ -68,7 +68,7 @@ fn main() {
     let src = fs::read_to_string(file_name).unwrap();
 
     log("lexer", &format!("lexing: {file_name}"));
-    let mut tokens = vec![];
+    let mut tokens: Vec<(Token, &str)> = vec![];
     let mut lex = Token::lexer(&src);
 
     while let Some(token) = lex.next() {
@@ -84,7 +84,7 @@ fn main() {
             );
             return;
         }
-        tokens.push(token);
+        tokens.push((token, lex.slice()));
     }
 
     // These tokens can be removed because their existence is effectively a given,
@@ -93,7 +93,7 @@ fn main() {
         .iter()
         .filter(|x| {
             !matches!(
-                x,
+                x.0,
                 Token::OpenBracket
                     | Token::CloseBracket
                     | Token::Close
@@ -102,16 +102,27 @@ fn main() {
             )
         })
         .map(|x| x.clone())
-        .collect::<Vec<Token>>();
+        .collect::<Vec<(Token, &str)>>();
 
     log("lexer", &format!("done. {} tokens.", tokens.len()));
 
     // Checking arguments like this is flawed, but given the user isn't an idiot,
     //     it should be fine.
     if args.len() == 2 {
-        generate_signature_file(&mut tokens, file_name);
+        generate_signature_file(
+            // Convert Vec<(Token, &str)> to Vec<Token>
+            &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
+            file_name,
+        );
     } else if args.len() == 3 {
-        update_globals(&args, &file_name, &mut tokens);
+        if args[2].ends_with(".sigs") {
+            update_globals(
+                &args,
+                &file_name,
+                // Convert Vec<(Token, &str)> to Vec<Token>
+                &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
+            );
+        }
     }
 }
 
@@ -198,7 +209,7 @@ fn mode(numbers: &[u64]) -> &u64 {
         .expect("Cannot compute the mode of zero numbers")
 }
 
-fn generate_signature_file(tokens: &Vec<Token>, file_name: &str) {
+fn generate_signature_file(tokens: &mut Vec<Token>, file_name: &str) {
     // Thread safe reference counted vector containing each GlobalEntry
     //     a GlobalEntry contains the global's ID and a vector of strings
     //     contains it's signatures
@@ -214,8 +225,7 @@ fn generate_signature_file(tokens: &Vec<Token>, file_name: &str) {
 
     // A hash-set allows us to add items, while ignoring duplicates
     let mut globals = HashSet::new();
-
-    for tok in tokens {
+    for tok in tokens.iter() {
         if let Token::Global(id) = tok {
             // Duplicates aren't inserted, this process can be replaced
             //     with a Vec and checking if vec.contains(id)

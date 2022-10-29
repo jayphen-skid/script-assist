@@ -61,7 +61,7 @@ pub fn generate_global_signatures(global: &str, tokens: &Vec<Token>) -> Option<V
                 );
             }
         }
-        sig_buffer.push(token);
+        sig_buffer.push(&token);
     }
     return Some(sig_ret_buf);
 }
@@ -96,7 +96,7 @@ pub fn find_from_signature(signature: &str, tokens: &Vec<Token>) -> Option<Vec<u
                 globals.push(id.clone());
             }
         }
-        sig_buffer.push(token);
+        sig_buffer.push(&token);
     }
     Some(globals)
 }
