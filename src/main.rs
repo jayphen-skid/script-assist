@@ -657,7 +657,7 @@ fn generate_signature_file(tokens: &Vec<Token>, file_name: &str) {
     // Make sure all the threads are done before continuing
     while total.load(Ordering::SeqCst) != current.load(Ordering::SeqCst) {}
 
-    // Serialize the Vec<GlobalEntry> to JSOn
+    // Serialize the Vec<GlobalEntry> to JSON
     let sigs = signatures.lock().unwrap();
     let json = serde_json::to_string_pretty(&sigs.iter().collect::<Vec<&GlobalEntry>>()).unwrap();
 
