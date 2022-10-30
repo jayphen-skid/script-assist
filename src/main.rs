@@ -33,7 +33,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 const SIGNATURE_SIZE: u8 = 15;
-const MAX_GENERATED_SIGNATURES: u16 = 999;
+const MAX_GENERATED_SIGNATURES: u16 = 10;
 
 fn log(name: &str, content: &str) {
     println!("[{name}] {content}");
