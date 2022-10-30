@@ -6,6 +6,24 @@ To open the help menu:
 ```
 ./script-assist
 ```
+### Update global, function, local, etc.. (Recommended)
+```
+./script-assist old_script.c new_script.c token
+```
+Example:
+```
+./script-assist freemode_old.c freemode_new.c Global_1852989
+```
+
+script-assist supports any lex-able token in GTA V's scripts. Some valid examples include:
+* `func_xxxx`
+* `Local_xxxx`
+* `Global_xxxx`
+* `"Strings!"` (on Windows, " characters need to be escaped by \\)
+
+
+### Update every global in a script
+
 To generate global signatures given a script file:
 ```
 ./script-assist DECOMPILED_SCRIPT.c

@@ -18,10 +18,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+use crate::{lex, Token, MAX_GENERATED_SIGNATURES, SIGNATURE_SIZE};
+use regex::Regex;
+use std::default::Default;
+use strum::IntoEnumIterator;
 
-use crate::{Token, SIGNATURE_SIZE};
-
-pub fn generate_global_signatures(global: &str, tokens: &Vec<Token>) -> Option<Vec<String>> {
+pub fn generate_signatures(looking_for: &Token, tokens: &Vec<Token>) -> Option<Vec<String>> {
     // The signature return buffer is a vector that contains every found global
     //     for a given signature
     let mut sig_ret_buf = vec![];
@@ -29,14 +31,10 @@ pub fn generate_global_signatures(global: &str, tokens: &Vec<Token>) -> Option<V
     // The signature buffer is a rotating stream of the last X number of previous tokens
     let mut sig_buffer = vec![];
 
-    // Extract the numeric ID from a string with a format of: Global_XXXX
-    let i_id = global.split("_").collect::<Vec<&str>>()[1];
-    let i_id = i_id.trim_end_matches("\n").parse::<u64>().ok()?;
-
     for token in tokens {
-        // If we already found 4 signatures for a global, we can stop
+        // If we already found X signatures for a global, we can stop
         //     this is basically just for performance
-        if sig_ret_buf.len() > 3 {
+        if sig_ret_buf.len() > MAX_GENERATED_SIGNATURES as usize {
             break;
         }
 
@@ -49,16 +47,32 @@ pub fn generate_global_signatures(global: &str, tokens: &Vec<Token>) -> Option<V
         // If we found a token which is a Global, and the globals ID is what
         //     we are making a signature for. Generate a signature and append
         //     it to the vector
-        if let Token::Global(id) = token {
-            if id.clone() == i_id {
-                sig_ret_buf.push(
-                    // Generate signature from sig_buffer
-                    sig_buffer
-                        .iter()
-                        .map(|f: &&Token| f.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                );
+        if looking_for == token {
+            // Generate signature from sig_buffer
+            let signature = sig_buffer
+                .iter()
+                .map(|f: &&Token| f.to_signature())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            if !sig_ret_buf.contains(&signature) {
+                sig_ret_buf.push(signature);
+            }
+
+            // This block acts to remove patterns which are contained in other
+            //     patterns.
+            let tmp_sig_ret_buf = sig_ret_buf.clone();
+
+            for sig_1 in &tmp_sig_ret_buf {
+                for sig_2 in &tmp_sig_ret_buf {
+                    if sig_1.len() > sig_2.len() && sig_1.contains(sig_2) {
+                        sig_ret_buf = sig_ret_buf
+                            .iter()
+                            .filter(|f| f != &sig_2)
+                            .map(|f| f.clone())
+                            .collect::<Vec<String>>();
+                    }
+                }
             }
         }
         sig_buffer.push(&token);
@@ -66,13 +80,23 @@ pub fn generate_global_signatures(global: &str, tokens: &Vec<Token>) -> Option<V
     return Some(sig_ret_buf);
 }
 
-pub fn find_from_signature(signature: &str, tokens: &Vec<Token>) -> Option<Vec<u64>> {
+pub fn find_from_signature(signature: &str, tokens: &Vec<Token>) -> Option<Vec<usize>> {
     // Always keep track of the last X number of scanned elements whilst iterating
     //     used for signature generation
-    let mut sig_buffer = vec![];
+    let mut sig_buffer: Vec<&Token> = vec![];
     let i_len = signature.split(" ").collect::<Vec<&str>>().len() + 1;
 
+    let signature_ = generate_token_vec_from_signature(signature)?;
+    let signature = signature_.iter().map(|f| f).collect::<Vec<&Token>>();
+
+    // Empty tokens, so we can replace tokens with values to the same token
+    //     but without values in the token stream
+    let gbl = Token::Global(u64::default());
+    let ftc = Token::FunctionName(String::default());
+
     let mut globals = vec![];
+    let mut count = 0;
+
     for token in tokens {
         // If the vector's size is greater than the inputted signatures size,
         //     remove the first element of the vector
@@ -83,20 +107,70 @@ pub fn find_from_signature(signature: &str, tokens: &Vec<Token>) -> Option<Vec<u
         // If our current token is a Global, try generating a signature at our
         //     current position, and see if it matches the signature that was inputted,
         //     if it does, then add it to a vector
-        if let Token::Global(id) = token {
-            // Generate signature from token buffer
-            let current_signature = sig_buffer
-                .iter()
-                .map(|f: &&Token| f.to_string())
-                .collect::<Vec<_>>()
-                .join(" ");
 
-            // If the signature matches out inputted signature, add it to the vector
-            if signature == current_signature {
-                globals.push(id.clone());
-            }
+        // If the signature matches out inputted signature, add it to the vector
+        if signature == sig_buffer {
+            globals.push(count);
         }
-        sig_buffer.push(&token);
+        if let Token::Global(_) = token {
+            // We don't want to check if the global index's are the same
+            //    from the signature and the script. Because global indexes
+            //    are version dependant
+            sig_buffer.push(&gbl);
+        } else if let Token::FunctionName(_) = token {
+            sig_buffer.push(&ftc);
+        } else {
+            sig_buffer.push(&token);
+        }
+        count += 1;
     }
     Some(globals)
+}
+
+fn generate_token_vec_from_signature(signature: &str) -> Option<Vec<Token>> {
+    let mut out: Vec<Token> = vec![];
+    let parts = signature.split(" ").collect::<Vec<&str>>();
+    let regex = Regex::new(r"[\d]+").unwrap();
+    'outer: for part in &parts {
+        for tok in lex::Token::iter() {
+            let tok: Token = tok;
+            match tok {
+                Token::Native(_) => {
+                    if part.starts_with(r"!NTV") {
+                        out.push(Token::Native(
+                            regex.find(part).unwrap().as_str().parse().unwrap(),
+                        ));
+                        continue 'outer;
+                    }
+                }
+                Token::NumericLiteral(_) => {
+                    if part.starts_with("!L") {
+                        out.push(Token::NumericLiteral(
+                            regex.find(part).unwrap().as_str().parse().unwrap(),
+                        ));
+                        continue 'outer;
+                    }
+                }
+                Token::StringLiteral(_) => {
+                    if part.starts_with(r"!S") {
+                        out.push(Token::StringLiteral(
+                            regex.find(part).unwrap().as_str().parse().unwrap(),
+                        ));
+                        continue 'outer;
+                    }
+                }
+                _ => {
+                    if part == &tok.to_signature() {
+                        out.push(tok);
+                        continue 'outer;
+                    }
+                }
+            };
+        }
+        println!("unknown: {}", part);
+    }
+    if parts.len() != out.len() {
+        return None;
+    }
+    Some(out)
 }

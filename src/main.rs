@@ -28,10 +28,12 @@ use serde_derive::{Deserialize, Serialize};
 use signature::*;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::Hash;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
-const SIGNATURE_SIZE: u8 = 13;
+const SIGNATURE_SIZE: u8 = 15;
+const MAX_GENERATED_SIGNATURES: u16 = 999;
 
 fn log(name: &str, content: &str) {
     println!("[{name}] {content}");
@@ -67,7 +69,136 @@ fn main() {
     let file_name = &args[1];
     let src = fs::read_to_string(file_name).unwrap();
 
+    #[cfg(debug_assertions)]
     log("lexer", &format!("lexing: {file_name}"));
+
+    let tokens = lex_file(&src);
+
+    #[cfg(debug_assertions)]
+    log("lexer", &format!("done. {} tokens.", tokens.len()));
+
+    // Checking arguments like this is flawed, but given the user isn't an idiot,
+    //     it should be fine.
+    if args.len() == 2 {
+        generate_signature_file(
+            // Convert Vec<(Token, &str)> to Vec<Token>
+            &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
+            file_name,
+        );
+    } else if args.len() == 3 {
+        if args[2].ends_with(".sigs") {
+            update_globals(
+                &args,
+                &file_name,
+                // Convert Vec<(Token, &str)> to Vec<Token>
+                &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
+            );
+        } else {
+            // Generate signature from any (potentially non global) token
+            let token_to_find = &args[2];
+
+            let sigs = generate_signature_from_slice(&tokens, token_to_find);
+            // Print different messages depending on if multiple tokens with the same name were
+            //     found. This probably shouldn't happen, given our lexer.
+            if !sigs.is_empty() {
+                println!("{}", sigs);
+            } else {
+                println!("Couldn't find signatures matching: {}", token_to_find);
+            }
+        }
+    } else if args.len() == 4 {
+        // Given an input like this:
+        //     ./script-assist freemode_old.c freemode_new.c Global_XXXX
+        //     Find the equivalent token from freemode_old.c in freemode_new.c
+
+        let new_script = &args[2];
+        let token_to_find = &args[3];
+
+        let signature = generate_signature_from_slice(&tokens, token_to_find);
+
+        let new_script_src = fs::read_to_string(new_script).unwrap();
+        let new_script_tokens = lex_file(&new_script_src);
+
+        let results = find_slice_from_packed_signature(&new_script_tokens, &signature);
+        let results = mode(&results);
+        println!("{results}");
+    } else {
+        // Given an input like this:
+        //     ./script-assist freemode.c SIGNATURE
+        //     Return all matching results
+
+        // Extract signature from args
+        let signature = &args[2..].join(" ");
+        let all_found_tokens = find_slice_from_packed_signature(&tokens, signature);
+
+        if !all_found_tokens.is_empty() {
+            let mode = mode(&all_found_tokens);
+            println!("{}", mode);
+        } else {
+            println!("Found no results for input: {}", signature);
+        }
+    }
+}
+
+fn generate_signature_from_slice(tokens: &Vec<(Token, &str)>, token_to_find: &String) -> String {
+    // Find token which has a matching string slice to the input
+    let valid_tokens = tokens
+        .clone()
+        .iter()
+        .filter(|f| f.1 == token_to_find)
+        // Vec<(Token, &str)> -> Vec<Token>
+        .map(|f| f.0.clone())
+        .collect::<HashSet<Token>>();
+
+    if valid_tokens.is_empty() {
+        println!("No tokens found matching: {}", token_to_find);
+        panic!();
+    }
+    let tok = valid_tokens.iter().collect::<Vec<&Token>>()[0];
+    // It might find the same token in multiple places
+    //     but it should never find 2 different tokens.
+    //     HashSet wouldn't factor location into it's
+    //     uniqueness.
+    assert_eq!(valid_tokens.len(), 1);
+    let sigs = match generate_signatures(
+        &tok,
+        // Convert Vec<(Token, &str)> to Vec<Token>
+        &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
+    ) {
+        Some(n) => n,
+        None => {
+            println!("Could not find or a signature for it: {}", token_to_find);
+            panic!();
+        }
+    };
+    sigs.join("&")
+}
+
+fn find_slice_from_packed_signature<'a>(
+    tokens: &'a Vec<(Token, &str)>,
+    signature: &String,
+) -> Vec<&'a str> {
+    // Encase this is a packed signature (which is multiple signatures
+    //     delimited by &), extract them
+    let signatures = signature.split("&").collect::<Vec<&str>>();
+
+    // Vec<(Token, &str)> -> Vec<Token>
+    let packed_tokens = &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>();
+
+    let mut all_found_tokens = vec![];
+
+    for signature in &signatures {
+        let mut results = find_from_signature(signature, packed_tokens)
+            .unwrap()
+            .iter()
+            .map(|f| tokens[*f].1)
+            .collect::<Vec<&str>>();
+        all_found_tokens.append(&mut results);
+    }
+    all_found_tokens
+}
+
+fn lex_file(src: &String) -> Vec<(Token, &str)> {
     let mut tokens: Vec<(Token, &str)> = vec![];
     let mut lex = Token::lexer(&src);
 
@@ -82,7 +213,7 @@ fn main() {
                     &lex.source()[lex.span().start..lex.span().end + 10]
                 ),
             );
-            return;
+            panic!();
         }
         tokens.push((token, lex.slice()));
     }
@@ -103,27 +234,7 @@ fn main() {
         })
         .map(|x| x.clone())
         .collect::<Vec<(Token, &str)>>();
-
-    log("lexer", &format!("done. {} tokens.", tokens.len()));
-
-    // Checking arguments like this is flawed, but given the user isn't an idiot,
-    //     it should be fine.
-    if args.len() == 2 {
-        generate_signature_file(
-            // Convert Vec<(Token, &str)> to Vec<Token>
-            &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
-            file_name,
-        );
-    } else if args.len() == 3 {
-        if args[2].ends_with(".sigs") {
-            update_globals(
-                &args,
-                &file_name,
-                // Convert Vec<(Token, &str)> to Vec<Token>
-                &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>(),
-            );
-        }
-    }
+    tokens
 }
 
 fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<Token>) {
@@ -155,6 +266,11 @@ fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<Toke
             for signature in gbl.signatures {
                 globals.append(&mut find_from_signature(&signature, &tokens).unwrap());
             }
+            let globals = globals
+                .iter()
+                .map(|f| &tokens[*f])
+                .filter(|f| matches!(f, Token::Global(_)))
+                .collect::<Vec<&Token>>();
 
             // Display error if no signatures were able to be found
             if globals.is_empty() {
@@ -167,7 +283,7 @@ fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<Toke
             // Obtain the mode of the vector, which is just the most occurring value.
             //     Multiple signatures are usually obtained for each global, so we pick
             //     the one which points to a specific global the most
-            let mode = mode(&globals);
+            let mode = mode(&globals[..]);
             buf.lock()
                 .unwrap()
                 .push_str(&format!("{} <=> {mode}\n", gbl.global));
@@ -195,7 +311,11 @@ fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<Toke
 
 // This code is pasted from the internet, I forgot where
 //     I got it from. ¯\_(ツ)_/¯
-fn mode(numbers: &[u64]) -> &u64 {
+//     But.. I made it generic
+fn mode<T>(numbers: &[T]) -> &T
+where
+    T: Hash + Eq,
+{
     let mut occurrences = HashMap::new();
 
     for value in numbers {
@@ -247,11 +367,8 @@ fn generate_signature_file(tokens: &mut Vec<Token>, file_name: &str) {
         let current = Arc::clone(&current);
         {
             std::thread::spawn(move || {
-                // xxx => Global_XXXX
-                let str = format!("Global_{id}");
-
                 // Generate signature given Global_XXXX and the provided tokens
-                let sig = generate_global_signatures(&str, &tokens).unwrap();
+                let sig = generate_signatures(&Token::Global(id), &tokens).unwrap();
 
                 // A hashset is used so that the signatures generated from `find_from_signature`
                 //     aren't duplicates. As GTA's scripts have a lot of duplicate code.
@@ -267,9 +384,9 @@ fn generate_signature_file(tokens: &mut Vec<Token>, file_name: &str) {
                     //     I think it's better to care about quality of the
                     //     signatures
                     let gbl = find_from_signature(&s, &tokens).unwrap();
-
+                    let gbl = gbl.iter().map(|f| &tokens[*f]).collect::<Vec<&Token>>();
                     // If a signature doesn't lead to the proper global, don't add it
-                    if !gbl.contains(&id) {
+                    if !gbl.contains(&&Token::Global(id)) {
                         continue;
                     }
                     lc_signatures.insert(s);

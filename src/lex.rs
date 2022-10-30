@@ -22,7 +22,9 @@
 use logos::{Lexer, Logos};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use strum_macros::EnumIter;
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
@@ -35,23 +37,20 @@ fn hash(lex: &mut Lexer<Token>) -> Option<u64> {
     Some(calculate_hash(&n))
 }
 
+fn underscore(lex: &mut Lexer<Token>) -> Option<String> {
+    let str = lex.slice().to_string();
+    let n = str.split("_").collect::<Vec<&str>>()[1];
+    Some(n.to_owned())
+}
+
 fn int(lex: &mut Lexer<Token>) -> Option<String> {
     let n = lex
         .slice()
         .to_string()
         // Remove 'f' floating point suffix
-        .replace("f", "");
-    Some(n)
-}
+        .replace("f", "")
+        .replace(",", "");
 
-fn array(lex: &mut Lexer<Token>) -> Option<u64> {
-    let n: String = lex.slice().to_string();
-    let n: u64 = n
-        // [xxx] => xxx
-        .trim_start_matches("[")
-        .trim_end_matches("]")
-        .parse()
-        .ok()?;
     Some(n)
 }
 
@@ -61,7 +60,9 @@ fn global(lex: &mut Lexer<Token>) -> Option<u64> {
     Some(n)
 }
 
-#[derive(Logos, Debug, PartialEq, Clone, Deserialize, Serialize)]
+#[derive(
+    EnumIter, Logos, Debug, PartialEq, Clone, Deserialize, Serialize, Ord, PartialOrd, Eq, Hash,
+)]
 pub enum Token {
     #[regex(r"#[a-z]+ [\w ]+\s")]
     #[token("#endregion")]
@@ -133,8 +134,8 @@ pub enum Token {
     #[regex(r"(\.|->)f_[\d]+")]
     GlobalOffset,
 
-    #[regex(r"func_[\d]+")]
-    FunctionName,
+    #[regex(r"func_[\d]+", underscore)]
+    FunctionName(String),
 
     #[token("char")]
     Char,
@@ -299,22 +300,22 @@ pub enum Token {
     #[token(r"else")]
     Else,
 
-    #[regex(r"\[[\d]+\]", array)]
-    ArrayDefLiteral(u64),
+    #[regex(r"\[[\d]+\]")]
+    ArrayDefLiteral,
 
     #[error]
     #[regex(r"[ \t\n\r\f]+", logos::skip)]
     Error,
 }
 
-impl ToString for Token {
+impl Token {
     // Convert a token to it's signature value
-    fn to_string(&self) -> String {
+    pub(crate) fn to_signature(&self) -> String {
         return match self {
             Token::Preprocess => "PPC".to_owned(),
             Token::VarType => "VT".to_owned(),
             Token::Void => "VD".to_owned(),
-            Token::Long => "LG".to_owned(),
+            Token::Long => "VLG".to_owned(),
             Token::BitTest => "BTST".to_owned(),
             Token::StringCopy => "STC".to_owned(),
             Token::Int => "IT".to_owned(),
@@ -326,13 +327,13 @@ impl ToString for Token {
             Token::Mod => "MD".to_owned(),
             Token::MulOrRef => "MOR".to_owned(),
             Token::Div => "DV".to_owned(),
-            Token::Native(x) => format!("NTV{x}"),
+            Token::Native(x) => format!("!NTV{x}"),
             Token::Global(_) => "GB".to_owned(),
             Token::And => "A".to_owned(),
             Token::Not => "N".to_owned(),
             Token::Or => "O".to_owned(),
             Token::GlobalOffset => "GO".to_owned(),
-            Token::FunctionName => "FN".to_owned(),
+            Token::FunctionName(_) => "FN".to_owned(),
             Token::Char => "CH".to_owned(),
             Token::Vector => "VT".to_owned(),
             Token::VectorConst => "VC".to_owned(),
@@ -346,7 +347,7 @@ impl ToString for Token {
             Token::OpenOffsetLiteral => "OL".to_owned(),
             Token::CloseOffset => "CL".to_owned(),
             Token::Greater => "G".to_owned(),
-            Token::Less => "L".to_owned(),
+            Token::Less => "CL".to_owned(),
             Token::Eq => "E".to_owned(),
             Token::OrEq => "OE".to_owned(),
             Token::AndEq => "AE".to_owned(),
@@ -364,14 +365,14 @@ impl ToString for Token {
             Token::IntToFloat => "ITF".to_owned(),
             Token::StringIntConCat => "SIC".to_owned(),
             Token::EntryPoint => "EP".to_owned(),
-            Token::NumericLiteral(x) => format!("L{x}"),
+            Token::NumericLiteral(x) => format!("!L{x}"),
             Token::FtoV => "FV".to_owned(),
             Token::StackPush => "SP".to_owned(),
             Token::CallLoc => "CL".to_owned(),
             Token::StackValue => "SV".to_owned(),
             Token::IntToString => "ITS".to_owned(),
-            Token::StringLiteral(x) => format!("S{x}"),
-            Token::Local => "LL".to_owned(),
+            Token::StringLiteral(x) => format!("!S{x}"),
+            Token::Local => "CLL".to_owned(),
             Token::Var => "VR".to_owned(),
             Token::Param => "PM".to_owned(),
             Token::Switch => "SW".to_owned(),
@@ -386,8 +387,17 @@ impl ToString for Token {
             Token::BitOr => "BO".to_owned(),
             Token::Joaat => "JT".to_owned(),
             Token::Else => "EL".to_owned(),
-            Token::ArrayDefLiteral(x) => format!("AD{x}"),
+            Token::ArrayDefLiteral => format!("AD"),
             Token::Error => "".to_owned(),
         };
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            _ => f.write_str(&format!("{:?}", self)),
+        }?;
+        Ok(())
     }
 }
