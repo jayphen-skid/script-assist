@@ -255,8 +255,8 @@ pub enum Token {
     #[regex("\"[\\^':\\&\\(\\)  ?,\\\\\\|\\]\\[!*$<>~/\\.\\d\\w \t@-]*\"", hash)]
     StringLiteral(u64),
 
-    #[regex(r"(\w?)Local_[\d]+")]
-    Local,
+    #[regex(r"(\w?)Local_[\d]+", underscore)]
+    Local(String),
 
     #[regex(r"(\w?)Var[\d]+")]
     Var,
@@ -372,7 +372,7 @@ impl Token {
             Token::StackValue => "SV".to_owned(),
             Token::IntToString => "ITS".to_owned(),
             Token::StringLiteral(x) => format!("!S{x}"),
-            Token::Local => "CLL".to_owned(),
+            Token::Local(_) => "CLL".to_owned(),
             Token::Var => "VR".to_owned(),
             Token::Param => "PM".to_owned(),
             Token::Switch => "SW".to_owned(),

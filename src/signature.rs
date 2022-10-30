@@ -96,6 +96,7 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
     //     but without values in the token stream
     let gbl = Token::Global(u64::default());
     let ftc = Token::FunctionName(String::default());
+    let lcl = Token::Local(String::default());
 
     let mut globals = vec![];
     let mut count = 0;
@@ -122,6 +123,8 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
             sig_buffer.push(&gbl);
         } else if let Token::FunctionName(_) = token {
             sig_buffer.push(&ftc);
+        } else if let Token::Local(_) = token {
+            sig_buffer.push(&lcl);
         } else {
             sig_buffer.push(&token);
         }
