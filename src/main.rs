@@ -120,6 +120,12 @@ fn main() {
         let new_script_tokens = lex_file(&new_script_src);
 
         let results = find_slice_from_packed_signature(&new_script_tokens, &signature);
+
+        if results.is_empty() {
+            println!("Could not find: {}", token_to_find);
+            panic!();
+        }
+
         let results = mode(&results);
         println!("{results}");
     } else {
