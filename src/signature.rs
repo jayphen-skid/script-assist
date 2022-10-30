@@ -80,7 +80,10 @@ pub fn generate_signatures(looking_for: &Token, tokens: &Vec<Token>) -> Option<V
     return Some(sig_ret_buf);
 }
 
-pub fn find_from_signature(signature: &str, tokens: &Vec<Token>) -> Option<Vec<usize>> {
+pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
+    signature: &str,
+    tokens: T,
+) -> Option<Vec<usize>> {
     // Always keep track of the last X number of scanned elements whilst iterating
     //     used for signature generation
     let mut sig_buffer: Vec<&Token> = vec![];

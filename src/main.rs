@@ -177,25 +177,49 @@ fn generate_signature_from_slice(tokens: &Vec<(Token, &str)>, token_to_find: &St
 fn find_slice_from_packed_signature<'a>(
     tokens: &'a Vec<(Token, &str)>,
     signature: &String,
-) -> Vec<&'a str> {
+) -> Vec<String> {
     // Encase this is a packed signature (which is multiple signatures
     //     delimited by &), extract them
     let signatures = signature.split("&").collect::<Vec<&str>>();
 
     // Vec<(Token, &str)> -> Vec<Token>
-    let packed_tokens = &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>();
+    let packed_tokens = tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>();
+    let packed_tokens = Arc::new(packed_tokens);
+    let all_found_tokens = Arc::new(Mutex::new(vec![]));
 
-    let mut all_found_tokens = vec![];
+    let worker_count = Arc::new(std::sync::atomic::AtomicI32::new(0));
+    let tokens = Arc::new(
+        tokens
+            .clone()
+            .iter()
+            .map(|f| (f.0.clone(), f.1.clone().to_owned()))
+            .collect::<Vec<(Token, String)>>(),
+    );
 
     for signature in &signatures {
-        let mut results = find_from_signature(signature, packed_tokens)
-            .unwrap()
-            .iter()
-            .map(|f| tokens[*f].1)
-            .collect::<Vec<&str>>();
-        all_found_tokens.append(&mut results);
+        let all_found_tokens = all_found_tokens.clone();
+        let signature = signature.clone().to_owned();
+        let worker_count = worker_count.clone();
+        let packed_tokens = packed_tokens.clone();
+        let tokens = tokens.clone();
+
+        std::thread::spawn(move || {
+            worker_count.fetch_add(1, Ordering::SeqCst);
+            let results = find_from_signature(&signature, packed_tokens.iter())
+                .unwrap()
+                .iter()
+                .map(|f| tokens.get(*f).unwrap().1.to_owned())
+                .collect::<Vec<String>>();
+            all_found_tokens
+                .lock()
+                .unwrap()
+                .append(&mut results.clone());
+            worker_count.fetch_sub(1, Ordering::SeqCst);
+        });
     }
-    all_found_tokens
+    while worker_count.load(Ordering::SeqCst) != 0 {}
+    let f_lock = all_found_tokens.lock().unwrap();
+    f_lock.iter().map(|f| f.to_owned()).collect()
 }
 
 fn lex_file(src: &String) -> Vec<(Token, &str)> {
@@ -264,7 +288,7 @@ fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<Toke
 
             // Add every found signature to vector
             for signature in gbl.signatures {
-                globals.append(&mut find_from_signature(&signature, &tokens).unwrap());
+                globals.append(&mut find_from_signature(&signature, tokens.iter()).unwrap());
             }
             let globals = globals
                 .iter()
