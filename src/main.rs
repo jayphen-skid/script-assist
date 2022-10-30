@@ -195,7 +195,7 @@ fn find_slice_from_packed_signature<'a>(
             .map(|f| (f.0.clone(), f.1.clone().to_owned()))
             .collect::<Vec<(Token, String)>>(),
     );
-
+    let mut total_workers = 0;
     for signature in &signatures {
         let all_found_tokens = all_found_tokens.clone();
         let signature = signature.clone().to_owned();
@@ -203,8 +203,8 @@ fn find_slice_from_packed_signature<'a>(
         let packed_tokens = packed_tokens.clone();
         let tokens = tokens.clone();
 
+        total_workers += 1;
         std::thread::spawn(move || {
-            worker_count.fetch_add(1, Ordering::SeqCst);
             let results = find_from_signature(&signature, packed_tokens.iter())
                 .unwrap()
                 .iter()
@@ -214,10 +214,10 @@ fn find_slice_from_packed_signature<'a>(
                 .lock()
                 .unwrap()
                 .append(&mut results.clone());
-            worker_count.fetch_sub(1, Ordering::SeqCst);
+            worker_count.fetch_add(1, Ordering::SeqCst);
         });
     }
-    while worker_count.load(Ordering::SeqCst) != 0 {}
+    while worker_count.load(Ordering::SeqCst) != total_workers {}
     let f_lock = all_found_tokens.lock().unwrap();
     f_lock.iter().map(|f| f.to_owned()).collect()
 }
