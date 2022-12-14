@@ -297,7 +297,7 @@ pub enum Token {
     #[token(r"else")]
     Else,
 
-    #[regex(r"((\w?)Var[\d]+|[a-zA-Z]+Param[\d]+|[a-z]+|entryHeader|[a-zA-Z]+[\d]*|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector)")]
+    #[regex(r"((\w?)Var[\d]+|[a-zA-Z]+Param[\d]+|[a-z]+|[A-Z_]+|entryHeader|[a-zA-Z]+[\d]*|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector)")]
     Var,
 
     #[regex(r"\[[\d]+\]")]
