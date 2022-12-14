@@ -189,10 +189,10 @@ pub enum Token {
     AndEq,
 
     // I assume this is a decompilation artifact
-    #[regex(r"(Jump @[\d]+; //[\w =]+)|goto 0x[0-9A-F]")]
+    #[regex(r"(Jump @[\d]+; //[\w =]+)|goto 0x[0-9a-fA-F]+")]
     Jump,
 
-    #[regex(r"/\*[\d a-zA-Z!@#$%\^\(\)\.\-+_';.,/&~:]+\*/")]
+    #[regex(r#"/\*[\d a-zA-Z!@#$%\^\(\)\.\-+_';.,/&~:ä<>\?–"]+\*/"#)]
     Comment,
 
     #[token(",")]
@@ -297,7 +297,7 @@ pub enum Token {
     #[token(r"else")]
     Else,
 
-    #[regex(r"((\w?)Var[\d]+|[a-zA-Z]+Param[\d]+|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector)")]
+    #[regex(r"((\w?)Var[\d]+|[a-zA-Z]+Param[\d]+|[a-z]+|entryHeader|[a-zA-Z]+[\d]*|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector)")]
     Var,
 
     #[regex(r"\[[\d]+\]")]
