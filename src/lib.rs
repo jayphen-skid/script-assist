@@ -139,12 +139,20 @@ pub fn find_slice_from_packed_signature<'a>(
     f_lock.iter().map(|f| f.to_owned()).collect()
 }
 
+pub fn lex_file_weak(src: &String) -> Vec<(Token, &str)> {
+	lex_file_impl(src, false)
+}
+
 pub fn lex_file(src: &String) -> Vec<(Token, &str)> {
+	lex_file_impl(src, true)
+}
+
+fn lex_file_impl(src: &String, strict: bool) -> Vec<(Token, &str)> {
     let mut tokens: Vec<(Token, &str)> = vec![];
     let mut lex = Token::lexer(&src);
 
     while let Some(token) = lex.next() {
-        if token == Token::Error {
+        if token == Token::Error && strict {
             log(
                 "lexer",
                 &format!(

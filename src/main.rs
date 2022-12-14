@@ -45,7 +45,7 @@ fn main() {
     #[cfg(debug_assertions)]
     log("lexer", &format!("lexing: {file_name}"));
 
-    let tokens = lex_file(&src);
+    let tokens = lex_file_weak(&src);
 
     #[cfg(debug_assertions)]
     log("lexer", &format!("done. {} tokens.", tokens.len()));
@@ -89,7 +89,7 @@ fn main() {
 
         let signature = generate_signature_from_slice(&tokens, token_to_find);
         let new_script_src = fs::read_to_string(new_script).unwrap();
-        let new_script_tokens = lex_file(&new_script_src);
+        let new_script_tokens = lex_file_weak(&new_script_src);
 
         let results = find_slice_from_packed_signature(&new_script_tokens, &signature);
 
