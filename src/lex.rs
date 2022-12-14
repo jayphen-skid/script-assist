@@ -291,7 +291,7 @@ pub enum Token {
     #[token(r"|")]
     BitOr,
 
-    #[regex(r"(joaat|_)")]
+    #[regex(r"(joaat|_|.f_joaat)")]
     Joaat,
 
     #[token(r"else")]
