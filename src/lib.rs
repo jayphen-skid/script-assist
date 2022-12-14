@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 pub mod lex;
 pub mod signature;
 
-pub const SIGNATURE_SIZE: u8 = 15;
+pub const SIGNATURE_SIZE: u8 = 32;
 pub const MAX_GENERATED_SIGNATURES: u16 = 10;
 
 pub fn log(name: &str, content: &str) {
