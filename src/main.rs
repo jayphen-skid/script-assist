@@ -115,7 +115,6 @@ fn main() {
         let token_to_find = &args[3];
 
         let signature = generate_signature_from_slice(&tokens, token_to_find);
-
         let new_script_src = fs::read_to_string(new_script).unwrap();
         let new_script_tokens = lex_file(&new_script_src);
 

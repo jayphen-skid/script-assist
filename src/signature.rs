@@ -97,6 +97,7 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
     let gbl = Token::Global(u64::default());
     let ftc = Token::FunctionName(String::default());
     let lcl = Token::Local(String::default());
+    let ntv = Token::Native(0);
 
     let mut globals = vec![];
     let mut count = 0;
@@ -113,9 +114,20 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
         //     if it does, then add it to a vector
 
         // If the signature matches out inputted signature, add it to the vector
-        if signature == sig_buffer {
-            globals.push(count);
+        let smallest_size = if signature.len() > sig_buffer.len() {
+            sig_buffer.len()
+        } else {
+            signature.len()
+        };
+        for i in 0..smallest_size {
+            if signature[i] != sig_buffer[i] {
+                break;
+            }
+            if i == smallest_size - 1 {
+                globals.push(count);
+            }
         }
+
         if let Token::Global(_) = token {
             // We don't want to check if the global index's are the same
             //    from the signature and the script. Because global indexes
@@ -125,11 +137,15 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
             sig_buffer.push(&ftc);
         } else if let Token::Local(_) = token {
             sig_buffer.push(&lcl);
+        } else if let Token::Native(_) = token {
+            sig_buffer.push(&ntv);
         } else {
             sig_buffer.push(&token);
         }
         count += 1;
+        //print!("{} ", token.to_signature());
     }
+
     Some(globals)
 }
 
@@ -141,14 +157,14 @@ fn generate_token_vec_from_signature(signature: &str) -> Option<Vec<Token>> {
         for tok in lex::Token::iter() {
             let tok: Token = tok;
             match tok {
-                Token::Native(_) => {
-                    if part.starts_with(r"!NTV") {
-                        out.push(Token::Native(
-                            regex.find(part).unwrap().as_str().parse().unwrap(),
-                        ));
-                        continue 'outer;
-                    }
-                }
+                //Token::Native(_) => {
+                //    if part.starts_with(r"!NTV") {
+                //        out.push(Token::Native(
+                //			0 // regex.find(part).unwrap().as_str().parse().unwrap(),
+                //        ));
+                //        continue 'outer;
+                //    }
+                //}
                 Token::NumericLiteral(_) => {
                     if part.starts_with("!L") {
                         out.push(Token::NumericLiteral(

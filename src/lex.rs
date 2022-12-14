@@ -83,13 +83,13 @@ pub enum Token {
     #[token("StringCopy")]
     StringCopy,
 
-    #[token("int")]
+    #[regex("(int|eStackSize)")]
     Int,
 
     #[token("float")]
     Float,
 
-    #[token("bool")]
+    #[token("(bool|BOOL)")]
     Bool,
 
     #[token("NULL")]
@@ -114,7 +114,7 @@ pub enum Token {
     //     NAMESPACE::HASH
     //     HASH
     #[regex(
-        r"([A-Z_]+::[A-Z_0-9]+)|(unk_)*(0x[0-9A-F]+)|([A-Z]+::_0x[0-9A-F]+)",
+        r"([A-Z_]+::[a-zA-Z_0-9]+)|(unk_)*(0x[0-9A-F]+)|([A-Z]+::_0x[0-9A-F]+)",
         hash
     )]
     Native(u64),
@@ -146,7 +146,7 @@ pub enum Token {
     #[token("Vector")]
     VectorConst,
 
-    #[token("char*")]
+    #[regex(r"(const )*char\*")]
     CharPtr,
 
     #[regex(r"struct<[\d]+>")]
@@ -192,7 +192,7 @@ pub enum Token {
     #[regex(r"Jump @[\d]+; //[\w =]+")]
     Jump,
 
-    #[regex(r"/\*[\d]+\*/")]
+    #[regex(r"/\*[\d a-zA-Z!@#$%\^\(\)\.\-+_';.,/&~:]+\*/")]
     Comment,
 
     #[token(",")]
@@ -201,10 +201,10 @@ pub enum Token {
     #[token("(")]
     OpenBracket,
 
-    #[token("if")]
+    #[regex(r"(if|\?)")]
     If,
 
-    #[token("while")]
+    #[regex("(while|for)")]
     While,
 
     #[token("true")]
@@ -219,16 +219,16 @@ pub enum Token {
     #[token("StringConCat")]
     StringConCat,
 
-    #[token("MemCopy")]
+    #[regex("(MemCopy|TEXT_LABEL_COPY|TEXT_LABEL_[A-Z_]+)")]
     MemCopy,
 
     #[token("IntToFloat")]
     IntToFloat,
 
-    #[token("StringIntConCat")]
+    #[regex("(StringIntConCat|IS_BIT_SET)")]
     StringIntConCat,
 
-    #[token("__EntryFunction__")]
+    #[regex("(__EntryFunction__)|(main)")]
     EntryPoint,
 
     // Common script decompilers seem to sometimes use complex numbers-
@@ -252,16 +252,13 @@ pub enum Token {
     IntToString,
 
     // I could probably black-list characters instead of white-listing them
-    #[regex("\"[\\^':\\&\\(\\)  ?,\\\\\\|\\]\\[!*$<>~/\\.\\d\\w \t@-]*\"", hash)]
+    #[regex("\"[%\\^':\\&\\(\\)  ?,\\\\\\|\\]\\[!*$<>~/\\.\\d\\w \t@-]*\"", hash)]
     StringLiteral(u64),
 
     #[regex(r"(\w?)Local_[\d]+", underscore)]
     Local(String),
 
-    #[regex(r"(\w?)Var[\d]+")]
-    Var,
-
-    #[regex(r"(\w?)Param[\d]+")]
+    #[regex(r"(((\w?)Param[\d]+)|uScriptParam_[\d]+)")]
     Param,
 
     #[token(r"switch")]
@@ -294,17 +291,20 @@ pub enum Token {
     #[token(r"|")]
     BitOr,
 
-    #[token(r"joaat")]
+    #[regex(r"(joaat|_)")]
     Joaat,
 
     #[token(r"else")]
     Else,
 
+    #[regex(r"((\w?)Var[\d]+|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO)")]
+    Var,
+
     #[regex(r"\[[\d]+\]")]
     ArrayDefLiteral,
 
     #[error]
-    #[regex(r"[ \t\n\r\f]+", logos::skip)]
+    #[regex(r"(([ \t\n\r\f]+)|//.*(\n|\r))", logos::skip)]
     Error,
 }
 
@@ -327,7 +327,7 @@ impl Token {
             Token::Mod => "MD".to_owned(),
             Token::MulOrRef => "MOR".to_owned(),
             Token::Div => "DV".to_owned(),
-            Token::Native(x) => format!("!NTV{x}"),
+            Token::Native(_x) => format!("NTV"), // Token::Native(x) => format!("!NTV{x}"),
             Token::Global(_) => "GB".to_owned(),
             Token::And => "A".to_owned(),
             Token::Not => "N".to_owned(),
