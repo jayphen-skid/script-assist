@@ -83,7 +83,7 @@ pub enum Token {
     #[token("StringCopy")]
     StringCopy,
 
-    #[regex("(int|eStackSize)")]
+    #[regex("(int|eStackSize|Vehicle|Ped|Player)")]
     Int,
 
     #[token("float")]
@@ -297,7 +297,7 @@ pub enum Token {
     #[token(r"else")]
     Else,
 
-    #[regex(r"((\w?)Var[\d]+|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector)")]
+    #[regex(r"((\w?)Var[\d]+|num|num_[\d]+|num[\d]+|unk|unk_[\d]+|unk[\d]+|i|j|k|l|m|n|o|p|flag|value|stackSize|DEFAULT|MICRO|vector|[a-zA-Z]Param[\d]+)")]
     Var,
 
     #[regex(r"\[[\d]+\]")]
