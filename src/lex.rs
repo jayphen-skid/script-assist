@@ -89,7 +89,7 @@ pub enum Token {
     #[token("float")]
     Float,
 
-    #[token("(bool|BOOL)")]
+    #[regex("(bool|BOOL)")]
     Bool,
 
     #[token("NULL")]
