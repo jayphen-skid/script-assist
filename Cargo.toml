@@ -3,6 +3,14 @@ name = "script-assist"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "script_assist"
+path = "src/lib.rs"
+
+[[bin]]
+name = "script-assist"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
