@@ -18,6 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+use std::borrow::Borrow;
 use crate::{lex, Token, MAX_GENERATED_SIGNATURES, SIGNATURE_SIZE};
 use regex::Regex;
 use std::default::Default;
@@ -68,41 +69,115 @@ pub fn generate_signatures(looking_for: &Token, tokens: &Vec<Token>) -> Option<V
                     if sig_1.len() > sig_2.len() && sig_1.contains(sig_2) {
                         sig_ret_buf = sig_ret_buf
                             .iter()
-                            .filter(|f| f != &sig_2)
-                            .map(|f| f.clone())
+                            .filter(|f| f != &sig_2).cloned()
                             .collect::<Vec<String>>();
                     }
                 }
             }
         }
-        sig_buffer.push(&token);
+        sig_buffer.push(token);
     }
-    return Some(sig_ret_buf);
+    Some(sig_ret_buf)
 }
 
-pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
+pub fn token_to_byte<T: Borrow<Token>>(token: T) -> u8 {
+    match token.borrow() {
+        Token::Preprocess => 0,
+        Token::VarType => 1,
+        Token::Void => 2,
+        Token::Long => 3,
+        Token::BitTest => 4,
+        Token::StringCopy => 5,
+        Token::Int => 6,
+        Token::Float => 7,
+        Token::Bool => 8,
+        Token::Null => 9,
+        Token::Neg => 10,
+        Token::Add => 11,
+        Token::Mod => 12,
+        Token::MulOrRef => 13,
+        Token::Div => 14,
+        Token::Native(_) => 15,
+        Token::Global(_) => 16,
+        Token::And => 17,
+        Token::Not => 18,
+        Token::Or => 19,
+        Token::GlobalOffset => 20,
+        Token::FunctionName(_) => 21,
+        Token::Char => 22,
+        Token::Vector => 23,
+        Token::VectorConst => 24,
+        Token::CharPtr => 25,
+        Token::StructType => 26,
+        Token::Assignment => 27,
+        Token::EndStatement => 28,
+        Token::Open => 29,
+        Token::Close => 30,
+        Token::OpenOffset => 31,
+        Token::OpenOffsetLiteral => 32,
+        Token::CloseOffset => 33,
+        Token::Greater => 34,
+        Token::Less => 35,
+        Token::Eq => 36,
+        Token::OrEq => 37,
+        Token::AndEq => 38,
+        Token::Jump => 39,
+        Token::Comment => 40,
+        Token::Comma => 41,
+        Token::OpenBracket => 42,
+        Token::If => 43,
+        Token::While => 44,
+        Token::True => 45,
+        Token::False => 46,
+        Token::CloseBracket => 47,
+        Token::StringConCat => 48,
+        Token::MemCopy => 49,
+        Token::IntToFloat => 50,
+        Token::StringIntConCat => 51,
+        Token::EntryPoint => 52,
+        Token::NumericLiteral(_) => 53,
+        Token::FtoV => 54,
+        Token::StackPush => 55,
+        Token::CallLoc => 56,
+        Token::StackValue => 57,
+        Token::IntToString => 58,
+        Token::StringLiteral(_) => 59,
+        Token::Local(_) => 60,
+        Token::Param => 61,
+        Token::Switch => 62,
+        Token::Case => 63,
+        Token::Colon => 64,
+        Token::Default => 65,
+        Token::Break => 66,
+        Token::Continue => 67,
+        Token::Return => 68,
+        Token::FieldRef => 69,
+        Token::Deref => 70,
+        Token::BitOr => 71,
+        Token::Joaat => 72,
+        Token::Else => 73,
+        Token::Var => 74,
+        Token::ArrayDefLiteral => 75,
+        Token::Error => 76,
+    }
+}
+
+pub fn find_from_signature<'a, T: IntoIterator<Item = &'a u8>>(
     signature: &str,
     tokens: T,
 ) -> Option<Vec<usize>> {
     // Always keep track of the last X number of scanned elements whilst iterating
     //     used for signature generation
-    let mut sig_buffer: Vec<&Token> = vec![];
-    let i_len = signature.split(" ").collect::<Vec<&str>>().len() + 1;
+    let mut sig_buffer: Vec<u8> = Vec::with_capacity(signature.len() * 2);
+    let i_len = signature.split(' ').count() + 1;
 
     let signature_ = generate_token_vec_from_signature(signature)?;
-    let signature = signature_.iter().map(|f| f).collect::<Vec<&Token>>();
-
-    // Empty tokens, so we can replace tokens with values to the same token
-    //     but without values in the token stream
-    let gbl = Token::Global(u64::default());
-    let ftc = Token::FunctionName(String::default());
-    let lcl = Token::Local(String::default());
-    let ntv = Token::Native(0);
+    let signature = signature_.iter().map(token_to_byte).collect::<Vec<_>>();
 
     let mut globals = vec![];
-    let mut count = 0;
 
-    for token in tokens {
+    for (count, token) in tokens.into_iter().enumerate() {
+        //let token = token_to_byte(token);
         // If the vector's size is greater than the inputted signatures size,
         //     remove the first element of the vector
         if sig_buffer.len() == i_len {
@@ -128,21 +203,8 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
             }
         }
 
-        if let Token::Global(_) = token {
-            // We don't want to check if the global index's are the same
-            //    from the signature and the script. Because global indexes
-            //    are version dependant
-            sig_buffer.push(&gbl);
-        } else if let Token::FunctionName(_) = token {
-            sig_buffer.push(&ftc);
-        } else if let Token::Local(_) = token {
-            sig_buffer.push(&lcl);
-        } else if let Token::Native(_) = token {
-            sig_buffer.push(&ntv);
-        } else {
-            sig_buffer.push(&token);
-        }
-        count += 1;
+
+        sig_buffer.push(*token);
         //print!("{} ", token.to_signature());
     }
 
@@ -151,8 +213,8 @@ pub fn find_from_signature<'a, T: IntoIterator<Item = &'a Token>>(
 
 fn generate_token_vec_from_signature(signature: &str) -> Option<Vec<Token>> {
     let mut out: Vec<Token> = vec![];
-    let parts = signature.split(" ").collect::<Vec<&str>>();
-    let regex = Regex::new(r"[\d]+").unwrap();
+    let parts = signature.split(' ').collect::<Vec<&str>>();
+    let regex = Regex::new(r"\d+").unwrap();
     'outer: for part in &parts {
         for tok in lex::Token::iter() {
             let tok: Token = tok;

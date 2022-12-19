@@ -42,23 +42,27 @@ fn main() {
     let file_name = &args[1];
     let src = fs::read_to_string(file_name).unwrap();
 
-    #[cfg(debug_assertions)]
-    log("lexer", &format!("lexing: {file_name}"));
-
-    let tokens = lex_file_weak(&src);
-
-    #[cfg(debug_assertions)]
-    log("lexer", &format!("done. {} tokens.", tokens.len()));
-
     // Checking arguments like this is flawed, but given the user isn't an idiot,
     //     it should be fine.
     if args.len() == 2 {
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("lexing: {file_name}"));
+        let tokens = lex_file_weak(&src);
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("done. {} tokens.", tokens.len()));
+
         generate_signature_file(
             // Convert Vec<(Token, &str)> to Vec<Token>
             &mut tokens.iter().map(|f| f.0.clone()).collect::<Vec<_>>(),
             file_name,
         );
     } else if args.len() == 3 {
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("lexing: {file_name}"));
+        let tokens = lex_file_weak(&src);
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("done. {} tokens.", tokens.len()));
+
         if args[2].ends_with(".sigs") {
             update_globals(
                 &args,
@@ -83,14 +87,17 @@ fn main() {
         // Given an input like this:
         //     ./script-assist freemode_old.c freemode_new.c Global_XXXX
         //     Find the equivalent token from freemode_old.c in freemode_new.c
-
         let new_script = &args[2];
         let token_to_find = &args[3];
 
-        let signature = generate_signature_from_slice(&tokens, token_to_find);
         let new_script_src = fs::read_to_string(new_script).unwrap();
-        let new_script_tokens = lex_file_weak(&new_script_src);
-
+        let (tokens, new_script_tokens) = std::thread::scope(|s| {
+            let first= s.spawn(|| lex_file_weak(&src) );
+            let second= s.spawn(|| lex_file_weak(&new_script_src) );
+            (first.join(), second.join())
+        });
+        let (tokens, new_script_tokens) = (tokens.unwrap(), new_script_tokens.unwrap());
+        let signature = generate_signature_from_slice(&tokens, token_to_find);
         let results = find_slice_from_packed_signature(&new_script_tokens, &signature);
 
         if results.is_empty() {
@@ -104,6 +111,12 @@ fn main() {
         // Given an input like this:
         //     ./script-assist freemode.c SIGNATURE
         //     Return all matching results
+
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("lexing: {file_name}"));
+        let tokens = lex_file_weak(&src);
+        #[cfg(debug_assertions)]
+        log("lexer", &format!("done. {} tokens.", tokens.len()));
 
         // Extract signature from args
         let signature = &args[2..].join(" ");

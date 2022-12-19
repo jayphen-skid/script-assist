@@ -100,7 +100,9 @@ pub fn find_slice_from_packed_signature<'a>(
     let signatures = signature.split("&").collect::<Vec<&str>>();
 
     // Vec<(Token, &str)> -> Vec<Token>
-    let packed_tokens = tokens.iter().map(|f| f.0.clone()).collect::<Vec<Token>>();
+    let packed_tokens: Vec<u8> = tokens.iter().map(|f| f.0.clone())
+        .map(token_to_byte)
+        .collect::<Vec<_>>();
     let packed_tokens = Arc::new(packed_tokens);
     let all_found_tokens = Arc::new(Mutex::new(vec![]));
 
@@ -122,7 +124,7 @@ pub fn find_slice_from_packed_signature<'a>(
 
         total_workers += 1;
         std::thread::spawn(move || {
-            let results = find_from_signature(&signature, packed_tokens.iter())
+            let mut results = find_from_signature(&signature, packed_tokens.iter())
                 .unwrap()
                 .iter()
                 .map(|f| tokens.get(*f).unwrap().1.to_owned())
@@ -130,7 +132,7 @@ pub fn find_slice_from_packed_signature<'a>(
             all_found_tokens
                 .lock()
                 .unwrap()
-                .append(&mut results.clone());
+                .append(&mut results);
             worker_count.fetch_add(1, Ordering::SeqCst);
         });
     }
@@ -149,7 +151,7 @@ pub fn lex_file(src: &String) -> Vec<(Token, &str)> {
 
 fn lex_file_impl(src: &String, strict: bool) -> Vec<(Token, &str)> {
     let mut tokens: Vec<(Token, &str)> = vec![];
-    let mut lex = Token::lexer(&src);
+    let mut lex = Token::lexer(src);
 
     while let Some(token) = lex.next() {
         if token == Token::Error && strict {
@@ -180,8 +182,7 @@ fn lex_file_impl(src: &String, strict: bool) -> Vec<(Token, &str)> {
                     | Token::Open
                     | Token::EndStatement
             )
-        })
-        .map(|x| x.clone())
+        }).cloned()
         .collect::<Vec<(Token, &str)>>();
     tokens
 }
@@ -213,7 +214,11 @@ pub fn update_globals(args: &Vec<String>, file_name: &&String, tokens: &mut Vec<
 
             // Add every found signature to vector
             for signature in gbl.signatures {
-                globals.append(&mut find_from_signature(&signature, tokens.iter()).unwrap());
+                let packed_tokens: Vec<u8> = tokens.iter()
+                    .map(token_to_byte)
+                    .collect::<Vec<_>>();
+                let mut res = find_from_signature(&signature, &packed_tokens).unwrap();
+                globals.append(&mut res);
             }
             let globals = globals
                 .iter()
@@ -332,7 +337,12 @@ pub fn generate_signature_file(tokens: &mut Vec<Token>, file_name: &str) {
                     //     But.. generating signatures isn't a common thing so
                     //     I think it's better to care about quality of the
                     //     signatures
-                    let gbl = find_from_signature(&s, &tokens).unwrap();
+
+                    let packed_tokens: Vec<u8> = tokens.iter()
+                        .map(token_to_byte)
+                        .collect::<Vec<_>>();
+
+                    let gbl = find_from_signature(&s, &packed_tokens).unwrap();
                     let gbl = gbl.iter().map(|f| &tokens[*f]).collect::<Vec<&Token>>();
                     // If a signature doesn't lead to the proper global, don't add it
                     if !gbl.contains(&&Token::Global(id)) {
